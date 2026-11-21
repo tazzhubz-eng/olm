@@ -1,48 +1,23 @@
-/* ============================================================================
-   OLM TOOL - PHAN 2: MENU CHINH + AUTO LAM BAI
-   File nay chua menu chinh va toan bo cach lam bai:
-     - quet trang: trac nghiem / tab phan trang / de danh sach cau / video tuong tac
-     - khong co phan dang nhap; muon biet da xac thuc chua thi doc __OLMAuth
-   PHAN 1 (dang nhap + xac thuc) nam o parts/olm-auth.js
-   ============================================================================ */
+// ==UserScript==
+// @name         TOOL HOC TAP v9.0 (khong dang nhap)
+// @version      9.0.0-no-login
+// @namespace    http://tampermonkey.net/
+// @description  Auto lam bai OLM - menu chinh, khong co dang nhap
+// @author       rebuild
+// @match        *://*/*
+// @grant        unsafeWindow
+// @grant        GM_xmlhttpRequest
+// @grant        GM_getValue
+// @grant        GM_setValue
+// @connect      *
+// @run-at       document-start
+// ==/UserScript==
+
+/* OLM TOOL - MENU CHINH + AUTO LAM BAI (khong dang nhap) */
 (function(){
   'use strict';
-  var A = window.__OLMAuth;
-  if(!A){ console.error('[OLM] thieu parts/olm-auth.js'); return; }
   if(window.__OLMTool) return;
   window.__OLMTool = true;
-
-  /* ---- lay ham tu phan 1 (giu nguyen ten cu de than code khong phai sua) ---- */
-  var __hwid             = A.__hwid;
-  var __authPost         = A.__authPost;
-  var __authGate         = A.__authGate;
-  var __authLock         = A.__authLock;
-  var __authShowPanel    = A.__authShowPanel;
-  var __authRemainText   = A.__authRemainText;
-  var __authApply        = A.__authApply;
-  var __ls               = A.__ls;
-  var __lsSet            = A.__lsSet;
-  var __guardTyping      = A.__guardTyping;
-  var __authGoOffline    = A.__authGoOffline;
-  var __authStartOfflineRetry = A.__authStartOfflineRetry;
-  var __authStartHeartbeat = A.__authStartHeartbeat;
-  var __authWatchStart   = A.__authWatchStart;
-  var __authLogin        = A.__authLogin;
-  var __licCheck         = A.__licCheck;
-  var __AUTH = A.state;
-
-  /* thong bao khi server tat / bat lai (dong trang thai tu cap nhat trong phan 1) */
-  A.on('online', function(d){
-    try{
-      if(d.online){
-        console.log('[OLM] Máy chủ đã trở lại' + (d.pending ? ' — còn ' + d.pending + ' việc chờ' : ''));
-      }else{
-        console.log('[OLM] MÁY CHỦ ĐANG TẮT — dùng bộ nhớ xác thực trên máy' +
-                    (d.pending ? ' · ' + d.pending + ' việc chờ gửi' : ''));
-      }
-    }catch(e){}
-  });
-  A.on('status', function(msg){ try{ console.log('[OLM] ' + msg); }catch(e){} });
 
   /* ---------------- [A] BAT PAYLOAD JSON CUA TRANG ---------------- */
 
@@ -121,13 +96,9 @@
       '<div style="padding:14px;">' +
         '<button id="tht-btn" style="width:100%;padding:11px;border:none;border-radius:12px;background:#16a34a;color:#fff;font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 4px 12px rgba(22,163,74,.35);">Auto làm bài</button>' +
         '<button id="tht-diag" style="width:100%;margin-top:8px;padding:8px;border:1px solid #cbd5e1;border-radius:10px;background:#f8fafc;color:#475569;font-size:12px;cursor:pointer;">Chẩn đoán (copy log)</button>' +
-        '<div id="tht-authline" style="margin-top:9px;font-size:11px;color:#94a3b8;text-align:center;line-height:1.4;"></div>' +
-        '<button id="tht-recheck" style="width:100%;margin-top:6px;padding:7px;border:1px solid #e2e8f0;border-radius:10px;background:#f8fafc;color:#475569;font-size:11.5px;cursor:pointer;">↻ Kiểm tra key ngay</button>' +
-        '<button id="tht-logout" style="width:100%;margin-top:6px;padding:7px;border:1px solid #fecaca;border-radius:10px;background:#fff5f5;color:#b91c1c;font-size:11.5px;cursor:pointer;">Đổi key / đăng xuất</button>' +
         '<div id="tht-status" style="margin-top:10px;font-size:11px;color:#475569;max-height:180px;overflow-y:auto;line-height:1.5;word-break:break-word;"></div>' +
       '</div>';
     (document.body || document.documentElement).appendChild(panel);
-    panel.style.display = 'none';   // [v8.0] chỉ hiện sau khi xác thực key
 
     var statusEl = document.getElementById('tht-status');
     function appendStatus(){
@@ -161,29 +132,6 @@
     window.addEventListener('mousemove', function(e){ if(!dragging) return; panel.style.left=(e.clientX-ox)+'px'; panel.style.top=(e.clientY-oy)+'px'; });
     window.addEventListener('mouseup', function(){ dragging=false; });
     document.getElementById('tht-close').addEventListener('click', function(){ panel.remove(); });
-    document.getElementById('tht-logout').addEventListener('click', function(){
-      if(!confirm('Đăng xuất key và nhập key khác?')) return;
-      try{ localStorage.removeItem('tht_token'); localStorage.removeItem('tht_exp'); }catch(e){}
-      __lsSet('tht_auto','0');   // không tự đăng nhập lại ngay
-      __AUTH.ok=false; __AUTH.token=''; __AUTH.watchOn=false;
-      if(__AUTH.timer){ clearInterval(__AUTH.timer); __AUTH.timer=null; }
-      if(__AUTH.tick){ clearInterval(__AUTH.tick); __AUTH.tick=null; }
-      panel.style.display='none';
-      __authShowPanel('Đã đăng xuất. Nhập key khác.');
-    });
-    document.getElementById('tht-recheck').addEventListener('click', function(){
-      if(!__AUTH.ok) return;
-      __authPost('/api/heartbeat', {token:__AUTH.token, hwid:__hwid()}, 7000)
-        .then(function(r){
-          if(r && r.ok){
-            __authApply(r);
-            appendStatus('🔄 Key còn ' + __authRemainText() + ' (vừa cập nhật).');
-            var el=document.getElementById('tht-authline');
-            if(el) el.textContent=(__AUTH.name||'user')+' · còn '+__authRemainText();
-          }else if(r && r.ok===false){ __authLock(r.error || 'Key không còn hiệu lực.'); }
-        })
-        .catch(function(){ appendStatus('⚠ Không liên hệ được máy chủ.'); });
-    });
 
     var origLog = console.log.bind(console);
     console.log = function(){ appendStatus.apply(null, arguments); origLog.apply(console, arguments); };
@@ -191,32 +139,6 @@
     var __W = (typeof unsafeWindow !== 'undefined') ? unsafeWindow : window;
     var __sleep = function(ms){ return new Promise(function(r){setTimeout(r,ms);}); };
     var log = console.log.bind(console);
-
-    /* ===== [v8.0] CỔNG ĐĂNG NHẬP KEY =====
-       Chưa có key đúng -> chỉ hiện form đăng nhập.
-       Đúng -> mở menu chính + heartbeat 45s để kiểm tra key còn hiệu lực. */
-    var __unlocked = false;
-    function __unlock(){
-      if(__unlocked) return;
-      __unlocked = true;
-      panel.style.display = '';
-      if(__AUTH.multi) appendStatus('👥 Key nhóm — hạn dùng tính riêng cho máy này.');
-      if(__AUTH.offline){
-        appendStatus('🔌 Ngoại tuyến — dùng dữ liệu key đã lưu trên máy (' + (__AUTH.name || '') + ' · còn ' + __authRemainText() + ').');
-      }else{
-        appendStatus('✅ Đã xác thực key — ' + (__AUTH.name || '') + ' · còn ' + __authRemainText());
-      }
-      try{
-        var st = document.getElementById('tht-authline');
-        if(st) st.textContent = (__AUTH.name || 'user') + ' · còn ' + __authRemainText() + (__AUTH.offline ? ' · OFFLINE' : '');
-      }catch(e){}
-    }
-    __AUTH.onLock = function(msg){
-      panel.style.display = 'none';
-      __unlocked = false;
-      try{ appendStatus('🔒 ' + msg); }catch(e){}
-    };
-    __authGate(__unlock, function(msg){ try{ appendStatus('🔒 ' + msg); }catch(e){} });
 
     // [v7.9] hook sớm console.log của TRANG để bắt object qlib (runAll/correct/quizl_order)
     // trang OLM tự log ra khi mở từng câu -> giữ lại dùng làm đáp án chuẩn.
@@ -4130,11 +4052,6 @@
     var running=false;
     document.getElementById('tht-btn').addEventListener('click', async function(){
       if(running) return;
-      if(!__AUTH.ok){
-        appendStatus('⚠ Chưa xác thực key — nhập Tên + Chìa khoá ở cửa sổ đăng nhập.');
-        if(!document.getElementById('tht-login')) __authShowPanel();
-        return;
-      }
       running=true;
       var btn=document.getElementById('tht-btn'); btn.style.opacity='.6'; btn.style.cursor='not-allowed'; btn.textContent='Dang chay...';
       try{
